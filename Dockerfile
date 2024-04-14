@@ -10,18 +10,40 @@ WORKDIR /app
 EXPOSE 8000
 
 ARG DEV=false
+
+RUN apk add --no-cache \
+            --upgrade \
+        postgresql-client \
+        libpq \
+        nginx\
+    && apk add --no-cache \
+               --upgrade \
+               --virtual .build-deps \
+        postgresql-dev \
+        zlib-dev jpeg-dev \
+        alpine-sdk \
+    && apk add --no-cache \
+               --upgrade \
+        geos \
+        proj \
+        gdal \
+        binutils \
+    && ln -s /usr/lib/libproj.so.15 /usr/lib/libproj.so \
+    && ln -s /usr/lib/libgdal.so.20 /usr/lib/libgdal.so \
+    && ln -s /usr/lib/libgeos_c.so.1 /usr/lib/libgeos_c.so \
+    && mkdir /var/run/nginx
+
 RUN python -m venv /env && \
     /env/bin/pip install --upgrade pip && \
-    apk add --update --no-cache postgresql-client && \
-    apk add --update --no-cache --virtual .tmp-build-deps \
-        build-base postgresql-dev musl-dev && \
-
+#    apk add --update --no-cache postgresql-client && \
+#    apk add --update --no-cache --virtual .tmp-build-deps \
+#        build-base postgresql-dev musl-dev && \
     /env/bin/pip install -r /tmp/requirements.txt && \
     if [ $DEV = 'true' ] ; \
         then /env/bin/pip install -r /tmp/requirements.dev.txt ; \
     fi && \
     rm -rf /tmp && \
-    apk del .tmp-build-deps && \
+#    apk del .tmp-build-deps && \
     adduser \
         --disabled-password \
         --no-create-home \
