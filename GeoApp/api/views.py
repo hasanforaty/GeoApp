@@ -9,7 +9,6 @@ import zipfile
 
 
 class ShapeFileUploadApiView(APIView):
-    # parser_classes = (FileUploadParser,)
 
     def post(self, request, format=None):
 
@@ -17,15 +16,17 @@ class ShapeFileUploadApiView(APIView):
             file_obj = request.data['file']
             folder_path = f"./tmp/shapefiles/{file_obj.name}_{datetime.date.today().strftime("%Y%m%d")}"
             gdal_path = settings.GDAL_LIBRARY_PATH
+            file_name = file_obj.name.rsplit(".")[0]+datetime.date.today().strftime("%Y%m%d")
             with zipfile.ZipFile(file_obj, 'r') as zip_ref:
                 zip_ref.extractall(path=folder_path)
             databaseInfo = getDatabase()
             command = f"""
-            {gdal_path} ogr2ogr -append -f PostgreSQL  PG:"{databaseInfo}" {folder_path} -nln layer """
-            print(command)
+            {gdal_path} ogr2ogr -append -f PostgreSQL  PG:"{databaseInfo}" {folder_path} -nln {file_name}
+             -nlt MULTIPOLYGON """
             os.system(command)
         except Exception as e:
-            return Response(e)
+            print(e)
+            return Response(status=500)
         return Response(status=204)
 
 
