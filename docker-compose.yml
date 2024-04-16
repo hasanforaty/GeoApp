@@ -13,7 +13,7 @@ services:
     command: >
       sh -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
     environment:
-      - DB_HOST=db
+      - DB_HOST=172.19.0.2
       - DB_NAME=dev_db
       - DB_USER=dev_user
       - DB_PASS=flexpass
