@@ -25,7 +25,7 @@ SECRET_KEY = 'django-insecure-_ddi-z*2zgmkav!$)yzw2ghnxtkyg7s7p!$eo^9607)vbct^t4
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["0.0.0.0"]
 
 # Application definition
 
@@ -129,3 +129,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 GDAL_LIBRARY_PATH = glob('/usr/lib/libgdal.so.*')[0]
 GEOS_LIBRARY_PATH = glob('/usr/lib/libgeos_c.so.*')[0]
+
+GEOSERVER_USERNAME = 'admin'
+GEOSERVER_PASSWORD = 'geoserver'
+GEOSERVER_HOST = 'http://127.0.0.1:8080/geoserver'

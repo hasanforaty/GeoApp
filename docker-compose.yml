@@ -24,6 +24,8 @@ services:
     image: postgis/postgis:12-3.4-alpine
     volumes:
       - dev-db-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
     environment:
       - POSTGRES_DB=dev_db
       - POSTGRES_USER=dev_user
