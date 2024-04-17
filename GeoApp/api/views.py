@@ -14,9 +14,10 @@ class ShapeFileUploadApiView(APIView):
 
         try:
             file_obj = request.data['file']
-            folder_path = f"./tmp/shapefiles/{file_obj.name}_{datetime.date.today().strftime("%Y%m%d")}"
+            today_date = datetime.date.today().strftime("%Y%m%d")
+            folder_path = f"./tmp/shapefiles/{file_obj.name}_{today_date}"
             gdal_path = settings.GDAL_LIBRARY_PATH
-            file_name = file_obj.name.rsplit(".")[0]+datetime.date.today().strftime("%Y%m%d")
+            file_name = file_obj.name.rsplit(".")[0]+today_date
             with zipfile.ZipFile(file_obj, 'r') as zip_ref:
                 zip_ref.extractall(path=folder_path)
             databaseInfo = getDatabase()
