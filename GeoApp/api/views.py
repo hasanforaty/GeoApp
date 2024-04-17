@@ -33,21 +33,32 @@ class ShapeFileUploadApiView(APIView):
 class FeatureApiView(APIView):
 
 
-    def post(self, request,layer_name, format=None):
+    def post(self, request, layer_name, format=None):
         try:
-            geos = GEOSGeometry(request.data)
-            geoJson = geos.json
-            properties = geoJson['properties']
+            geos = GEOSGeometry(str(request.data['geometry']))
+            properties = request.data['properties']
             wkb = geos.wkb
             with getDatabaseConnection() as connection:
                 with connection.cursor() as curser:
-                    sql = SQL("Insert into {} (%s,%s) values (%s,%s)").format(Identifier(layer_name))
                     geoColumn = getGeometryColumns(curser, layer_name)
-                    curser.execute(sql,(geoColumn,','.join(properties.keys()),wkb,','.join(properties.values())))
+                    sql_command = "Insert into {} " + "(" + geoColumn
+                    for key in properties.keys():
+                        sql_command += ', ' + key
+                    sql_command += ') values (%s'
+                    for value in properties.values():
+                        sql_command += ', %s'
+                    sql_command += ")"
+                    print(sql_command)
+                    sql = SQL(sql_command).format(Identifier(layer_name))
+                    value = list(properties.values())
+                    value.insert(0, wkb)
+                    curser.execute(sql, value)
         except ValueError as e:
             return Response(status=422, exception=e)
-        except Exception as e:
-            return Response(status=500, exception=e)
+        except psycopg2.errors.InvalidParameterValue as e:
+            return Response(status=400, data="Missmatch :"+str(e))
+        return Response(status=200)
+
 
 
 
@@ -64,7 +75,7 @@ def getDatabaseConnection():
     USER = os.environ.get('DB_USER')
     PASSWORD = os.environ.get('DB_PASS')
     HOST = os.environ.get('DB_HOST')
-    psycopg2.connect('dbname='+NAME+' user='+USER +' password='+PASSWORD+'host='+HOST+'port=5432')
+    return psycopg2.connect('dbname='+NAME+' user='+USER +' password='+PASSWORD+'host='+HOST+'port=5432')
 
 def getGeometryColumns(curser,table_name):
     curser.execute("select f_geometry_column from geometry_columns where f_table_name = %s", (table_name,))
