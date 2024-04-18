@@ -109,6 +109,58 @@ class FeaturesApiView(APIView):
                     raise e
 
 
+class FeatureDetailApiView(APIView):
+    def get(self, reqeust, layer_name, pk):
+        with (getDatabaseConnection() as connection):
+            geo_table = getGeometryColumns(connection, layer_name)
+            primary_column = getPrimaryColumn(connection, layer_name)
+            sql_schema = SQL('Select * from {} where {}=%s').format(
+                Identifier(layer_name), Identifier(primary_column)
+            )
+            with connection.cursor(cursor_factory=RealDictCursor) as cursor:
+                try:
+
+                    cursor.execute(sql_schema, (pk,))
+                    result = cursor.fetchone()
+
+                    geo_bin = result.pop(geo_table, None)
+                    geometry = GEOSGeometry(geo_bin)
+                    geo_json = {
+                        "geometry": geometry.geojson,
+                        "properties": result,
+                    }
+
+                    return Response(status=200, data=geo_json)
+                except Exception as e:
+                    raise e
+
+    def put(self, request, layer_name, pk):
+        try:
+            geos = GEOSGeometry(str(request.data['geometry']))
+
+            properties = request.data['properties']
+            wkb = geos.wkb
+            with getDatabaseConnection() as connection:
+                primary_column = getPrimaryColumn(connection, layer_name)
+                properties.pop(primary_column, None)
+                with connection.cursor(cursor_factory=RealDictCursor) as curser:
+                    geoColumn = getGeometryColumns(connection, layer_name)
+                    sql_command = "Update {} " + "Set " + geoColumn + " = %s"
+                    for key in properties.keys():
+                        sql_command += ', ' + key + " = %s"
+                    sql_command += " Where  {} = " + pk
+                    print(sql_command)
+                    sql = SQL(sql_command).format(Identifier(layer_name), Identifier(primary_column))
+                    value = list(properties.values())
+                    value.insert(0, wkb)
+                    curser.execute(sql, value)
+        except ValueError as e:
+            return Response(status=422, exception=e)
+        except psycopg2.errors.InvalidParameterValue as e:
+            return Response(status=400, data="Missmatch :" + str(e))
+        return Response(status=200)
+
+
 def getDatabase():
     NAME = os.environ.get('DB_NAME')
     USER = os.environ.get('DB_USER')
