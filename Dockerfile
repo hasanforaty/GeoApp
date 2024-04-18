@@ -1,4 +1,4 @@
-FROM python:3.9-alpine3.13
+FROM python:3.9-alpine3.19
 LABEL maintainer="https://hasanforaty.github.io/"
 
 ENV PYTHONUNBUFFERED 1
@@ -8,9 +8,7 @@ COPY ./requirements.dev.txt /tmp/requirements.dev.txt
 COPY ./GeoApp /app
 WORKDIR /app
 EXPOSE 8000
-
 ARG DEV=false
-
 RUN apk add --no-cache \
             --upgrade \
         postgresql-client \
@@ -27,11 +25,10 @@ RUN apk add --no-cache \
         geos \
         proj \
         gdal \
+        gdal-dev \
         binutils \
     && ln -s /usr/lib/libproj.so.15 /usr/lib/libproj.so \
-    && ln -s /usr/lib/libgdal.so.20 /usr/lib/libgdal.so \
-    && ln -s /usr/lib/libgeos_c.so.1 /usr/lib/libgeos_c.so \
-    && mkdir /var/run/nginx
+    && ln -s /usr/lib/libgeos_c.so.1 /usr/lib/libgeos_c.so
 
 RUN python -m venv /env && \
     /env/bin/pip install --upgrade pip && \
