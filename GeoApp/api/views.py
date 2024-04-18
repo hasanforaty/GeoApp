@@ -3,11 +3,13 @@ import os
 import zipfile
 
 from django.conf import settings
+from psycopg2.extras import RealDictCursor
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.contrib.gis.geos import GEOSGeometry
 import psycopg2
 from psycopg2.sql import SQL, Identifier
+
 
 class ShapeFileUploadApiView(APIView):
 
@@ -18,7 +20,7 @@ class ShapeFileUploadApiView(APIView):
             today_date = datetime.date.today().strftime("%Y%m%d")
             folder_path = f"./tmp/shapefiles/{file_obj.name}_{today_date}"
             gdal_path = settings.GDAL_LIBRARY_PATH
-            file_name = file_obj.name.rsplit(".")[0]+today_date
+            file_name = file_obj.name.rsplit(".")[0] + today_date
             with zipfile.ZipFile(file_obj, 'r') as zip_ref:
                 zip_ref.extractall(path=folder_path)
             databaseInfo = getDatabase()
@@ -30,8 +32,8 @@ class ShapeFileUploadApiView(APIView):
             return Response(status=500)
         return Response(status=204)
 
-class FeatureApiView(APIView):
 
+class FeaturesApiView(APIView):
 
     def post(self, request, layer_name, format=None):
         try:
@@ -39,13 +41,13 @@ class FeatureApiView(APIView):
             properties = request.data['properties']
             wkb = geos.wkb
             with getDatabaseConnection() as connection:
-                with connection.cursor() as curser:
-                    geoColumn = getGeometryColumns(curser, layer_name)
+                with connection.cursor(cursor_factory=RealDictCursor) as curser:
+                    geoColumn = getGeometryColumns(connection, layer_name)
                     sql_command = "Insert into {} " + "(" + geoColumn
                     for key in properties.keys():
                         sql_command += ', ' + key
                     sql_command += ') values (%s'
-                    for value in properties.values():
+                    for _ in properties.values():
                         sql_command += ', %s'
                     sql_command += ")"
                     print(sql_command)
@@ -53,15 +55,58 @@ class FeatureApiView(APIView):
                     value = list(properties.values())
                     value.insert(0, wkb)
                     curser.execute(sql, value)
+                    result = geos.geojson
         except ValueError as e:
             return Response(status=422, exception=e)
         except psycopg2.errors.InvalidParameterValue as e:
-            return Response(status=400, data="Missmatch :"+str(e))
-        return Response(status=200)
+            return Response(status=400, data="Missmatch :" + str(e))
+        return Response(status=200, data=result)
 
+    def get(self, request, layer_name):
+        Limit = 1000
+        Offset = 0
+        page = 1
+        previous_url = None
+        url = request.build_absolute_uri().split("?")[0]
+        try:
+            query_set = request.GET
+            page = int(query_set['page'])
+            Limit = query_set['limit']
+            Offset = (page - 1) * Limit
+            if page > 1:
+                query = f'?page={page - 1}&limit={Limit}'
+                previous_url = url + query
+        except KeyError as e:
+            pass
+        query = f'?page={page + 1}&limit={Limit}'
+        next_url = url + query
+        with (getDatabaseConnection() as connection):
+            geo_table = getGeometryColumns(connection, layer_name)
+            sql_schema = SQL('Select * from {} LIMIT %s OFFSET %s').format(
+                Identifier(layer_name),
+            )
+            with connection.cursor(cursor_factory=RealDictCursor) as cursor:
+                try:
+                    cursor.execute(sql_schema, (Limit, Offset))
+                    results = cursor.fetchall()
+                    list = []
+                    for result in results:
+                        geo_bin = result.pop(geo_table, None)
+                        geometry = GEOSGeometry(geo_bin)
+                        geo_json = {
+                            "geometry": geometry.geojson,
+                            "properties": result,
+                        }
+                        list.append(geo_json)
 
-
-
+                    return Response(status=200, data={
+                        "page": page,
+                        "next": next_url,
+                        "previous": previous_url,
+                        "results": list
+                    })
+                except Exception as e:
+                    raise e
 
 
 def getDatabase():
@@ -70,12 +115,15 @@ def getDatabase():
     PASSWORD = os.environ.get('DB_PASS')
     HOST = os.environ.get('DB_HOST')
     return f'host={HOST} user={USER} password={PASSWORD} dbname={NAME} port=5432'
+
+
 def getDatabaseConnection():
     NAME = os.environ.get('DB_NAME')
     USER = os.environ.get('DB_USER')
     PASSWORD = os.environ.get('DB_PASS')
     HOST = os.environ.get('DB_HOST')
-    return psycopg2.connect('dbname='+NAME+' user='+USER +' password='+PASSWORD+'host='+HOST+'port=5432')
+    return psycopg2.connect('dbname=' + NAME + ' user=' + USER + ' password=' + PASSWORD + 'host=' + HOST + 'port=5432')
+
 
 def getGeometryColumns(connection, table_name):
     with connection.cursor() as cursor:
